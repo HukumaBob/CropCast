@@ -250,11 +250,11 @@ class CropCastApp(QMainWindow):
         self.init_ui()
         self.apply_dark_theme()
 
-        # Load settings
-        self.load_settings()
-
-        # Detect video sources
+        # Detect video sources first
         self.detect_sources()
+
+        # Load settings (includes restoring last source)
+        self.load_settings()
 
     def init_ui(self):
         """Initialize user interface"""
@@ -979,22 +979,18 @@ class CropCastApp(QMainWindow):
                 # Load per-source crop settings
                 self.crop_settings = settings.get('crop_settings', {})
 
-                # Restore last source if available (but don't auto-start preview)
+                # Restore last source if available and activate it
                 saved_source = settings.get('source')
                 if saved_source:
                     # Check if it's a file or device
                     is_device = saved_source.startswith(('video=', '/dev/'))
-
-                    # Temporarily block signals to prevent auto-loading
-                    self.source_combo.blockSignals(True)
 
                     if is_device:
                         # Find device in combo box
                         for i in range(self.source_combo.count()):
                             if self.source_combo.itemData(i) == saved_source:
                                 self.source_combo.setCurrentIndex(i)
-                                self.current_source = saved_source
-                                self.is_device_source = True
+                                # This will trigger on_source_changed automatically
                                 break
                     else:
                         # File source - add to combo box if exists
@@ -1002,14 +998,7 @@ class CropCastApp(QMainWindow):
                             self.source_combo.setItemText(0, Path(saved_source).name)
                             self.source_combo.setItemData(0, saved_source)
                             self.source_combo.setCurrentIndex(0)
-                            self.current_source = saved_source
-                            self.is_device_source = False
-
-                    self.source_combo.blockSignals(False)
-
-                    # Load crop for last source
-                    if saved_source:
-                        self.load_crop_for_source(saved_source)
+                            # This will trigger on_source_changed automatically
 
                 self.log_console("Settings loaded")
         except Exception as e:
