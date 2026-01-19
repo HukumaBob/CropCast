@@ -787,6 +787,11 @@ class CropCastApp(QMainWindow):
             self.log_console("Error: No source selected")
             return
 
+        # If converting from device, stop preview to release the device
+        if self.is_device_source and self.preview_thread and self.preview_thread.isRunning():
+            self.log_console("Stopping preview to release device...")
+            self.stop_device_preview()
+
         # Build ffmpeg command
         cmd = self.build_ffmpeg_command()
 
@@ -815,6 +820,11 @@ class CropCastApp(QMainWindow):
             self.conversion_thread.wait()
             self.log_console("Conversion stopped by user")
             self.reset_conversion_ui()
+
+            # Restart device preview if it was a device conversion
+            if self.is_device_source and self.current_source:
+                self.log_console("Restarting device preview...")
+                self.start_device_preview(self.current_source)
 
     def build_ffmpeg_command(self):
         """Build ffmpeg command for conversion"""
@@ -895,6 +905,11 @@ class CropCastApp(QMainWindow):
         """Handle conversion completion"""
         self.log_console(message)
         self.reset_conversion_ui()
+
+        # Restart device preview if it was a device conversion
+        if self.is_device_source and self.current_source:
+            self.log_console("Restarting device preview...")
+            self.start_device_preview(self.current_source)
 
     def reset_conversion_ui(self):
         """Reset UI after conversion"""
