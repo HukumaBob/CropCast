@@ -630,7 +630,7 @@ class CropCastApp(QMainWindow):
         if file_path:
             self.current_source = file_path
             self.input_path = str(Path(file_path).parent)  # Remember directory
-            self.source_combo.setItemText(0, Path(file_path).name)
+            # Update combo box data but keep text as "Select a file..."
             self.source_combo.setItemData(0, file_path)
             self.source_combo.setCurrentIndex(0)
             self.load_video(file_path)
@@ -995,7 +995,7 @@ class CropCastApp(QMainWindow):
                     else:
                         # File source - add to combo box if exists
                         if Path(saved_source).exists():
-                            self.source_combo.setItemText(0, Path(saved_source).name)
+                            # Keep text as "Select a file..." but set the data
                             self.source_combo.setItemData(0, saved_source)
                             self.source_combo.setCurrentIndex(0)
                             # This will trigger on_source_changed automatically
