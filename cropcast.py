@@ -816,6 +816,13 @@ class CropCastApp(QMainWindow):
         """Stop ongoing conversion"""
         if self.conversion_thread and self.conversion_thread.isRunning():
             self.log_console("Stopping conversion...")
+
+            # Disconnect signals to prevent double restart
+            try:
+                self.conversion_thread.finished.disconnect(self.conversion_finished)
+            except:
+                pass
+
             self.conversion_thread.terminate()
             self.conversion_thread.wait()
             self.log_console("Conversion stopped by user")
@@ -997,9 +1004,19 @@ class CropCastApp(QMainWindow):
         self.save_settings()
         self.media_player.stop()
         self.stop_device_preview()
+
+        # Stop conversion thread if running
         if self.conversion_thread and self.conversion_thread.isRunning():
+            # Disconnect signals to prevent callbacks during shutdown
+            try:
+                self.conversion_thread.finished.disconnect()
+                self.conversion_thread.progress.disconnect()
+            except:
+                pass
+
             self.conversion_thread.terminate()
-            self.conversion_thread.wait()
+            self.conversion_thread.wait(2000)  # Wait up to 2 seconds
+
         event.accept()
 
 
