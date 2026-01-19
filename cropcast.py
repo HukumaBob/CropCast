@@ -10,6 +10,7 @@ import json
 import subprocess
 import re
 from pathlib import Path
+from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QPushButton, QSpinBox, QSlider, QTextEdit,
@@ -236,12 +237,14 @@ class CropCastApp(QMainWindow):
 
         # Initialize variables
         self.current_source = None
+        self.input_path = str(Path.home())  # Last directory for file browsing
         self.output_path = str(Path.home())
         self.conversion_thread = None
         self.preview_thread = None
         self.is_device_source = False
         self.original_video_width = 640  # Default for devices
         self.original_video_height = 480  # Default for devices
+        self.crop_settings = {}  # Dictionary to store crop settings per source
 
         # Setup UI
         self.init_ui()
@@ -620,12 +623,13 @@ class CropCastApp(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Select Video File",
-            str(Path.home()),
+            self.input_path,
             "Video Files (*.mp4 *.avi *.mkv *.mov *.webm *.flv);;All Files (*.*)"
         )
 
         if file_path:
             self.current_source = file_path
+            self.input_path = str(Path(file_path).parent)  # Remember directory
             self.source_combo.setItemText(0, Path(file_path).name)
             self.source_combo.setItemData(0, file_path)
             self.source_combo.setCurrentIndex(0)
@@ -633,6 +637,10 @@ class CropCastApp(QMainWindow):
 
     def on_source_changed(self, index):
         """Handle source selection change"""
+        # Save crop settings for previous source
+        if self.current_source:
+            self.save_crop_for_source(self.current_source)
+
         # Stop any existing preview
         self.stop_device_preview()
         self.media_player.stop()
@@ -640,6 +648,9 @@ class CropCastApp(QMainWindow):
         source = self.source_combo.itemData(index)
         if source:
             self.current_source = source
+
+            # Load crop settings for new source
+            self.load_crop_for_source(source)
 
             # Check if it's a device or file
             is_device = source.startswith('video=') or source.startswith('/dev/')
@@ -762,6 +773,30 @@ class CropCastApp(QMainWindow):
             self.original_video_width,
             self.original_video_height
         )
+
+    def save_crop_for_source(self, source):
+        """Save current crop settings for specific source"""
+        self.crop_settings[source] = {
+            'crop_top': self.crop_top_spin.value(),
+            'crop_bottom': self.crop_bottom_spin.value(),
+            'crop_left': self.crop_left_spin.value(),
+            'crop_right': self.crop_right_spin.value()
+        }
+
+    def load_crop_for_source(self, source):
+        """Load crop settings for specific source"""
+        if source in self.crop_settings:
+            settings = self.crop_settings[source]
+            self.crop_top_spin.setValue(settings['crop_top'])
+            self.crop_bottom_spin.setValue(settings['crop_bottom'])
+            self.crop_left_spin.setValue(settings['crop_left'])
+            self.crop_right_spin.setValue(settings['crop_right'])
+        else:
+            # Reset to defaults if no settings for this source
+            self.crop_top_spin.setValue(0)
+            self.crop_bottom_spin.setValue(0)
+            self.crop_left_spin.setValue(0)
+            self.crop_right_spin.setValue(0)
 
     def select_output_path(self):
         """Select output folder"""
@@ -896,13 +931,10 @@ class CropCastApp(QMainWindow):
             cmd.extend(['-t', '30'])
             self.log_console("Note: Device recording limited to 30 seconds")
 
-        # Output file
+        # Output file with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         input_name = Path(self.current_source).stem if not is_device else "capture"
-        output_file = Path(self.output_path) / f"{input_name}_cropped.webm"
-
-        # Check if file exists and warn
-        if output_file.exists():
-            self.log_console(f"Warning: Output file will be overwritten: {output_file}")
+        output_file = Path(self.output_path) / f"{input_name}_cropped_{timestamp}.webm"
 
         cmd.append(str(output_file))
 
@@ -938,15 +970,16 @@ class CropCastApp(QMainWindow):
                 with open(self.SETTINGS_FILE, 'r') as f:
                     settings = json.load(f)
 
-                self.crop_top_spin.setValue(settings.get('crop_top', 0))
-                self.crop_bottom_spin.setValue(settings.get('crop_bottom', 0))
-                self.crop_left_spin.setValue(settings.get('crop_left', 0))
-                self.crop_right_spin.setValue(settings.get('crop_right', 0))
+                # Load global settings
                 self.output_path = settings.get('output_path', str(Path.home()))
+                self.input_path = settings.get('input_path', str(Path.home()))
                 self.quality_spin.setValue(settings.get('quality', 30))
                 self.bitrate_spin.setValue(settings.get('bitrate', 0))
 
-                # Restore source if available (but don't auto-start preview)
+                # Load per-source crop settings
+                self.crop_settings = settings.get('crop_settings', {})
+
+                # Restore last source if available (but don't auto-start preview)
                 saved_source = settings.get('source')
                 if saved_source:
                     # Check if it's a file or device
@@ -974,6 +1007,10 @@ class CropCastApp(QMainWindow):
 
                     self.source_combo.blockSignals(False)
 
+                    # Load crop for last source
+                    if saved_source:
+                        self.load_crop_for_source(saved_source)
+
                 self.log_console("Settings loaded")
         except Exception as e:
             self.log_console(f"Error loading settings: {str(e)}")
@@ -981,15 +1018,17 @@ class CropCastApp(QMainWindow):
     def save_settings(self):
         """Save settings to file"""
         try:
+            # Save current crop for current source
+            if self.current_source:
+                self.save_crop_for_source(self.current_source)
+
             settings = {
-                'crop_top': self.crop_top_spin.value(),
-                'crop_bottom': self.crop_bottom_spin.value(),
-                'crop_left': self.crop_left_spin.value(),
-                'crop_right': self.crop_right_spin.value(),
                 'output_path': self.output_path,
+                'input_path': self.input_path,
                 'source': self.current_source,
                 'quality': self.quality_spin.value(),
-                'bitrate': self.bitrate_spin.value()
+                'bitrate': self.bitrate_spin.value(),
+                'crop_settings': self.crop_settings  # Save all per-source crop settings
             }
 
             with open(self.SETTINGS_FILE, 'w') as f:
