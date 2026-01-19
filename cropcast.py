@@ -776,7 +776,15 @@ class CropCastApp(QMainWindow):
 
     def save_crop_for_source(self, source):
         """Save current crop settings for specific source"""
-        self.crop_settings[source] = {
+        # For files, use directory as key; for devices, use device path
+        if source and not source.startswith(('video=', '/dev/')):
+            # File source - use directory path
+            key = str(Path(source).parent) + '/'
+        else:
+            # Device source - use device path directly
+            key = source
+
+        self.crop_settings[key] = {
             'crop_top': self.crop_top_spin.value(),
             'crop_bottom': self.crop_bottom_spin.value(),
             'crop_left': self.crop_left_spin.value(),
@@ -785,8 +793,16 @@ class CropCastApp(QMainWindow):
 
     def load_crop_for_source(self, source):
         """Load crop settings for specific source"""
-        if source in self.crop_settings:
-            settings = self.crop_settings[source]
+        # For files, use directory as key; for devices, use device path
+        if source and not source.startswith(('video=', '/dev/')):
+            # File source - use directory path
+            key = str(Path(source).parent) + '/'
+        else:
+            # Device source - use device path directly
+            key = source
+
+        if key in self.crop_settings:
+            settings = self.crop_settings[key]
             self.crop_top_spin.setValue(settings['crop_top'])
             self.crop_bottom_spin.setValue(settings['crop_bottom'])
             self.crop_left_spin.setValue(settings['crop_left'])
